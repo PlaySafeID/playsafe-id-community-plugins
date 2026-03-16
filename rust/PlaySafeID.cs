@@ -51,7 +51,8 @@
 //     configured Oxide group are allowed in; those without are denied
 //   - Admin/whitelist SteamID bypass
 //   - Silent kicks (no server chat announcement)
-//   - Admin command to submit community bans to the PlaySafe ID API
+//   - Automatic reporting of anti-cheat bans (EAC, VAC, DMA) to PlaySafe ID
+//   - Admin commands (/psidban, /psidunban) for explicit ban management
 //
 // Constraints (community guideline compliance):
 //   - Does NOT modify any game UI
@@ -339,26 +340,35 @@ namespace Oxide.Plugins
         #endregion
 
         // ===================================================================
-        // BAN HOOKS — EAC / SERVER BANS
+        // BAN HOOKS — AUTOMATIC ANTI-CHEAT BAN REPORTING
         // ===================================================================
         #region Ban Hooks
 
         /// <summary>
-        /// Fires when a player is banned on the server (includes EAC bans).
-        /// Reports the ban to the PlaySafe ID Community API automatically.
+        /// Fires when a player is banned on the server (EAC or admin /ban).
+        /// Only reports bans where the reason clearly indicates an anti-cheat
+        /// detection (EAC, VAC, DMA). Other bans (toxicity, griefing, manual
+        /// admin actions) are outside PlaySafe ID's scope and are skipped.
+        /// Admins can still report any ban type explicitly via /psidban.
         /// </summary>
         private void OnPlayerBanned(string name, ulong steamId, string address, string reason)
         {
             if (string.IsNullOrEmpty(reason)) return;
 
-            string steamIdStr = steamId.ToString();
             string banType = InferBanType(reason);
+            if (banType == null)
+            {
+                Log($"Skipping ban for {name} ({steamId}) — reason does not match a known anti-cheat detection: {reason}");
+                return;
+            }
+
+            string steamIdStr = steamId.ToString();
             string reporter = InferReporter(reason);
 
             SubmitCommunityBan(steamIdStr, banType, reporter, reason, null, (success, resp) =>
             {
                 if (success)
-                    Puts($"[PlaySafe ID] Ban for {name} ({steamIdStr}) reported to PlaySafe ID.");
+                    Puts($"[PlaySafe ID] Anti-cheat ban for {name} ({steamIdStr}) reported to PlaySafe ID.");
                 else
                     PrintWarning($"[PlaySafe ID] Failed to report ban for {name} ({steamIdStr}): {resp}");
             });
@@ -1182,41 +1192,41 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
-        /// Best-effort detection of ban type from a ban reason string.
+        /// Strict detection of ban type from a ban reason string.
+        /// Returns null if the reason does not clearly indicate a known
+        /// anti-cheat detection. Only matches that can be confidently
+        /// attributed to an anti-cheat system are reported automatically.
         /// </summary>
         private string InferBanType(string reason)
         {
-            if (string.IsNullOrEmpty(reason)) return "CHEATING_OTHER";
+            if (string.IsNullOrEmpty(reason)) return null;
             string r = reason.ToUpper();
 
-            if (r.Contains("EAC") || r.Contains("EASY ANTI") || r.Contains("HACK") || r.Contains("CHEAT"))
+            if (r.Contains("EAC") || r.Contains("EASY ANTI"))
                 return "CHEATING_SOFTWARE";
-            if (r.Contains("BOT") || r.Contains("SCRIPT"))
-                return "CHEATING_BOTTING";
+            if (r.Contains("VAC"))
+                return "CHEATING_SOFTWARE";
             if (r.Contains("DMA"))
                 return "CHEATING_DMA";
-            if (r.Contains("HARDWARE") || r.Contains("HWID"))
-                return "CHEATING_HARDWARE";
 
-            return "CHEATING_OTHER";
+            return null;
         }
 
         /// <summary>
-        /// Best-effort detection of reporter from a ban reason string.
+        /// Determines the reporting source based on the ban reason.
+        /// Only called when InferBanType returned a non-null match.
         /// </summary>
         private string InferReporter(string reason)
         {
-            if (string.IsNullOrEmpty(reason)) return "OTHER";
+            if (string.IsNullOrEmpty(reason)) return "ANTI_CHEAT";
             string r = reason.ToUpper();
 
             if (r.Contains("EAC") || r.Contains("EASY ANTI"))
                 return "EAC";
-            if (r.Contains("BATTLEYE"))
-                return "BATTLEYE";
             if (r.Contains("VAC"))
                 return "VAC";
 
-            return "COMMUNITY_ADMIN";
+            return "ANTI_CHEAT";
         }
 
         private void Log(string message)
