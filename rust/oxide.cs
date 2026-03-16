@@ -117,8 +117,8 @@ namespace Oxide.Plugins
                 "76561198000000000"
             };
 
-            [JsonProperty("Allow Oxide/Server Admins to bypass checks")]
-            public bool AllowAdminsBypass { get; set; } = true;
+            [JsonProperty("Allow Oxide/Server Admins and Moderators to bypass checks")]
+            public bool AllowAdminsAndModeratorsBypass { get; set; } = true;
 
             [JsonProperty("Log events to server console")]
             public bool LogEvents { get; set; } = true;
@@ -226,9 +226,9 @@ namespace Oxide.Plugins
             }
 
             // --- Bypass: server admins ---
-            if (_config.AllowAdminsBypass && IsServerAdmin(player))
+            if (_config.AllowAdminsAndModeratorsBypass && IsAdminOrModerator(player))
             {
-                Log($"{name} ({steamId}) is a server admin — bypassing.");
+                Log($"{name} ({steamId}) is an admin/moderator — bypassing.");
                 return;
             }
 
@@ -289,7 +289,7 @@ namespace Oxide.Plugins
                 if (player == null || !player.IsConnected) continue;
                 string steamId = player.UserIDString;
                 if (IsWhitelisted(steamId)) continue;
-                if (_config.AllowAdminsBypass && IsServerAdmin(player)) continue;
+                if (_config.AllowAdminsAndModeratorsBypass && IsAdminOrModerator(player)) continue;
                 eligiblePlayers[steamId] = player;
             }
 
@@ -1101,7 +1101,11 @@ namespace Oxide.Plugins
                    _config.WhitelistedSteamIds.Contains(steamId);
         }
 
-        private bool IsServerAdmin(BasePlayer player)
+        /// <summary>
+        /// Checks authLevel >= 1, which covers both admins (level 2)
+        /// and moderators (level 1) in Oxide/Rust.
+        /// </summary>
+        private bool IsAdminOrModerator(BasePlayer player)
         {
             if (player == null) return false;
             return player.IsAdmin || player.net?.connection?.authLevel >= 1;
