@@ -282,38 +282,55 @@ namespace Oxide.Plugins
             var players = BasePlayer.activePlayerList;
             if (players == null || players.Count == 0) return;
 
-            Log($"Periodic re-check starting for {players.Count} connected players...");
-
+            // Collect eligible players (not whitelisted, not admin)
+            var eligiblePlayers = new Dictionary<string, BasePlayer>();
             foreach (BasePlayer player in players.ToArray())
             {
                 if (player == null || !player.IsConnected) continue;
-
                 string steamId = player.UserIDString;
-                string name = player.displayName;
-
                 if (IsWhitelisted(steamId)) continue;
                 if (_config.AllowAdminsBypass && IsServerAdmin(player)) continue;
+                eligiblePlayers[steamId] = player;
+            }
 
-                GetUserStatus(steamId, (status) =>
+            if (eligiblePlayers.Count == 0) return;
+
+            Log($"Periodic re-check starting for {eligiblePlayers.Count} eligible player(s)...");
+
+            // Chunk into groups of BATCH_MAX_USERS and batch-check each
+            var steamIds = eligiblePlayers.Keys.ToList();
+            for (int i = 0; i < steamIds.Count; i += BATCH_MAX_USERS)
+            {
+                var chunk = steamIds.GetRange(i, Math.Min(BATCH_MAX_USERS, steamIds.Count - i));
+
+                BatchGetUserStatus(chunk, (results) =>
                 {
-                    if (player == null || !player.IsConnected) return;
+                    foreach (var kvp in results)
+                    {
+                        string steamId = kvp.Key;
+                        string status = kvp.Value;
 
-                    if (IsActiveStatus(status))
-                    {
-                        AssignOxideGroup(steamId);
-                    }
-                    else
-                    {
-                        RemoveOxideGroup(steamId);
-                        SilentKick(player, _config.KickMessageNotVerified);
-                        Log($"Periodic: Kicked {name} ({steamId}) — status: {status ?? "NOT_FOUND"}.");
+                        if (!eligiblePlayers.ContainsKey(steamId)) continue;
+                        BasePlayer player = eligiblePlayers[steamId];
+                        if (player == null || !player.IsConnected) continue;
+
+                        if (IsActiveStatus(status))
+                        {
+                            AssignOxideGroup(steamId);
+                        }
+                        else
+                        {
+                            RemoveOxideGroup(steamId);
+                            SilentKick(player, _config.KickMessageNotVerified);
+                            Log($"Periodic: Kicked {player.displayName} ({steamId}) — status: {status ?? "NOT_FOUND"}.");
+                        }
                     }
                 },
                 () =>
                 {
-                    // During periodic checks, API failures skip the player rather than
+                    // During periodic checks, API failures skip the batch rather than
                     // mass-kicking everyone during a brief outage.
-                    PrintWarning($"[PlaySafe ID] Periodic: API failure for {name} ({steamId}). Skipping.");
+                    PrintWarning("[PlaySafe ID] Periodic: Batch status check failed. Skipping batch.");
                 });
             }
         }
@@ -714,6 +731,111 @@ namespace Oxide.Plugins
                     onError?.Invoke();
                 }
             }, this, RequestMethod.GET, headers, _config.TimeoutSeconds);
+        }
+
+        #endregion
+
+        #region API — Batch User Status
+
+        private const int BATCH_MAX_USERS = 50;
+
+        /// <summary>
+        /// POST /v1/community/user/batch
+        /// Header: X-Api-Key, Content-Type: application/json
+        ///
+        /// Body: { "users": ["STEAM:id1", "STEAM:id2", ...] }
+        /// Response: { "users": [{ platform, platformUserId, status }], "notFound": ["STEAM:id99"] }
+        ///
+        /// Returns a dictionary mapping steamId -> status (null for not-found users).
+        /// </summary>
+        private void BatchGetUserStatus(List<string> steamIds,
+            Action<Dictionary<string, string>> onResult, Action onError)
+        {
+            if (steamIds == null || steamIds.Count == 0)
+            {
+                onResult?.Invoke(new Dictionary<string, string>());
+                return;
+            }
+
+            string url = $"{API_BASE}/user/batch";
+
+            var users = new List<string>();
+            foreach (string id in steamIds)
+                users.Add($"{PLATFORM}:{id}");
+
+            var payload = new Dictionary<string, object> { { "users", users } };
+            string body = JsonConvert.SerializeObject(payload);
+
+            var headers = new Dictionary<string, string>
+            {
+                { "X-Api-Key", _config.ApiKey },
+                { "Content-Type", "application/json" },
+                { "Accept", "application/json" }
+            };
+
+            if (_config.LogEvents)
+                Puts($"[PlaySafe ID] Batch status request for {steamIds.Count} user(s): POST {url}");
+
+            webrequest.Enqueue(url, body, (code, response) =>
+            {
+                if (_config.LogEvents)
+                    Puts($"[PlaySafe ID] Batch status response: HTTP {code}");
+
+                if (code < 200 || code >= 300 || string.IsNullOrEmpty(response))
+                {
+                    PrintWarning($"[PlaySafe ID] Batch status check — HTTP {code}: {response}");
+                    onError?.Invoke();
+                    return;
+                }
+
+                try
+                {
+                    var wrapper = JsonConvert.DeserializeObject<Dictionary<string, object>>(response);
+                    var result = new Dictionary<string, string>();
+
+                    if (wrapper != null && wrapper.ContainsKey("users") && wrapper["users"] != null)
+                    {
+                        var usersResult = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
+                            wrapper["users"].ToString());
+                        if (usersResult != null)
+                        {
+                            foreach (var user in usersResult)
+                            {
+                                string userId = user.ContainsKey("platformUserId")
+                                    ? user["platformUserId"]?.ToString() : null;
+                                string status = user.ContainsKey("status")
+                                    ? user["status"]?.ToString() : null;
+                                if (userId != null)
+                                    result[userId] = status;
+                            }
+                        }
+                    }
+
+                    // Mark not-found users with null status
+                    if (wrapper != null && wrapper.ContainsKey("notFound") && wrapper["notFound"] != null)
+                    {
+                        var notFound = JsonConvert.DeserializeObject<List<string>>(
+                            wrapper["notFound"].ToString());
+                        if (notFound != null)
+                        {
+                            foreach (string entry in notFound)
+                            {
+                                // Entry format is "STEAM:12345" — extract the ID
+                                string id = entry.Contains(":") ? entry.Split(':')[1] : entry;
+                                if (!result.ContainsKey(id))
+                                    result[id] = null;
+                            }
+                        }
+                    }
+
+                    onResult?.Invoke(result);
+                }
+                catch (Exception ex)
+                {
+                    PrintWarning($"[PlaySafe ID] Batch status parse error: {ex.Message}");
+                    onError?.Invoke();
+                }
+            }, this, RequestMethod.POST, headers, _config.TimeoutSeconds);
         }
 
         #endregion
