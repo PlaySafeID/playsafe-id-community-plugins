@@ -82,7 +82,7 @@ namespace Oxide.Plugins
 
         private class PluginConfig
         {
-            [JsonProperty("PlaySafe ID Community API Key")]
+            [JsonProperty("PlaySafe ID Community API Key (stored in plain text — restrict file permissions on oxide/config/)")]
             public string ApiKey { get; set; } = "YOUR_COMMUNITY_API_KEY";
 
             [JsonProperty("Game Code (must match the code registered with PlaySafe ID)")]
