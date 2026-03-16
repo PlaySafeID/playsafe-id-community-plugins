@@ -771,14 +771,17 @@ namespace Oxide.Plugins
         #region API — List User Bans
 
         /// <summary>
-        /// GET /v1/community/bans/user/{platform}/{platformUserId}
+        /// GET /v1/community/bans/user/{platform}/{platformUserId}?limit=100&amp;page=N
         /// Header: X-Api-Key
         ///
-        /// Returns a list of community bans for the specified user.
+        /// Returns all community bans for the specified user, paginating
+        /// automatically when the total exceeds one page.
         /// </summary>
-        private void GetUserBans(string steamId, Action<List<Dictionary<string, object>>> onResult, Action<string> onError)
+        private void GetUserBans(string steamId, Action<List<Dictionary<string, object>>> onResult,
+            Action<string> onError, int page = 1, List<Dictionary<string, object>> accumulated = null)
         {
-            string url = $"{API_BASE}/bans/user/{PLATFORM}/{steamId}";
+            const int PAGE_SIZE = 100;
+            string url = $"{API_BASE}/bans/user/{PLATFORM}/{steamId}?limit={PAGE_SIZE}&page={page}";
 
             if (_config.LogEvents)
                 Puts($"[PlaySafe ID] Requesting bans: GET {url}");
@@ -793,7 +796,7 @@ namespace Oxide.Plugins
             {
                 if (code == 404)
                 {
-                    onResult?.Invoke(new List<Dictionary<string, object>>());
+                    onResult?.Invoke(accumulated ?? new List<Dictionary<string, object>>());
                     return;
                 }
 
@@ -813,7 +816,22 @@ namespace Oxide.Plugins
                             wrapper["bans"].ToString());
                         if (bans != null)
                         {
-                            onResult?.Invoke(bans);
+                            if (accumulated == null)
+                                accumulated = new List<Dictionary<string, object>>();
+                            accumulated.AddRange(bans);
+
+                            // Check if more pages exist
+                            int total = 0;
+                            if (wrapper.ContainsKey("total"))
+                                int.TryParse(wrapper["total"]?.ToString(), out total);
+
+                            if (total > page * PAGE_SIZE)
+                            {
+                                GetUserBans(steamId, onResult, onError, page + 1, accumulated);
+                                return;
+                            }
+
+                            onResult?.Invoke(accumulated);
                             return;
                         }
                     }
