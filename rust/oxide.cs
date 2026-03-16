@@ -171,6 +171,9 @@ namespace Oxide.Plugins
         // Key: admin ID (IPlayer.Id), Value: list of ban dictionaries from last lookup
         private Dictionary<string, List<Dictionary<string, object>>> _banLookupCache
             = new Dictionary<string, List<Dictionary<string, object>>>();
+        private Dictionary<string, DateTime> _banLookupTimestamps
+            = new Dictionary<string, DateTime>();
+        private const int BAN_CACHE_STALE_MINUTES = 5;
 
         private void Init()
         {
@@ -194,6 +197,7 @@ namespace Oxide.Plugins
         {
             _recheckTimer?.Destroy();
             _banLookupCache?.Clear();
+            _banLookupTimestamps?.Clear();
         }
 
         #endregion
@@ -496,6 +500,7 @@ namespace Oxide.Plugins
                     {
                         caller.Reply($"[PlaySafe ID] No bans found for {steamId}.");
                         _banLookupCache.Remove(caller.Id);
+                        _banLookupTimestamps.Remove(caller.Id);
                         return;
                     }
 
@@ -513,13 +518,15 @@ namespace Oxide.Plugins
                     {
                         caller.Reply($"[PlaySafe ID] No active bans found for {steamId}. ({bans.Count} overturned/expired ban(s) exist.)");
                         _banLookupCache.Remove(caller.Id);
+                        _banLookupTimestamps.Remove(caller.Id);
                         return;
                     }
 
-                    // Cache the results for this admin
+                    // Cache the results and timestamp for this admin
                     _banLookupCache[caller.Id] = activeBans;
+                    _banLookupTimestamps[caller.Id] = DateTime.UtcNow;
 
-                    caller.Reply($"[PlaySafe ID] Found {activeBans.Count} active ban(s) for {steamId}:");
+                    caller.Reply($"[PlaySafe ID] Found {activeBans.Count} active ban(s) for {steamId} (looked up just now):");
                     caller.Reply("  ───────────────────────────────────────────");
 
                     for (int i = 0; i < activeBans.Count; i++)
@@ -562,6 +569,14 @@ namespace Oxide.Plugins
                 }
 
                 var cachedBans = _banLookupCache[caller.Id];
+
+                // Warn if using stale cached data
+                if (_banLookupTimestamps.ContainsKey(caller.Id))
+                {
+                    int minutesAgo = (int)(DateTime.UtcNow - _banLookupTimestamps[caller.Id]).TotalMinutes;
+                    if (minutesAgo >= BAN_CACHE_STALE_MINUTES)
+                        caller.Reply($"[PlaySafe ID] Warning: Ban data is from {minutesAgo} minutes ago. Run /psidunban <steamID> again for fresh results.");
+                }
 
                 if (banIndex < 1 || banIndex > cachedBans.Count)
                 {
