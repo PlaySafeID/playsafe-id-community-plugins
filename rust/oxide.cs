@@ -164,7 +164,7 @@ namespace Oxide.Plugins
         // LIFECYCLE
         // ===================================================================
         #region Lifecycle
-gh repo clone PlaySafeID/playsafe-id-community-plugins
+
         private Timer _recheckTimer;
 
         // Stores the last ban lookup per admin so they can reference bans by number
