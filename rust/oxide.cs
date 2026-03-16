@@ -745,6 +745,7 @@ namespace Oxide.Plugins
                 { "platformUserId", steamId },
                 { "type", banType },
                 { "reporter", reporter },
+                { "reason", reason },
                 { "evidence", evidence },
                 { "gameCode", _config.GameCode },
                 { "startsAt", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") },
