@@ -19,3 +19,40 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+DISCLAIMER
+
+This plugin is provided as an optional community resource and is NOT
+an official PlaySafe ID product. PlaySafe ID Ltd. ("PlaySafe ID") does
+not warrant, endorse, guarantee, or assume responsibility for this
+plugin. It is provided "as is" without warranty of any kind, either
+express or implied, including but not limited to the implied warranties
+of merchantability, fitness for a particular purpose, or
+non-infringement.
+
+PlaySafe ID is not responsible for the creation, maintenance, support,
+or ongoing development of this plugin. PlaySafe ID shall not be held
+responsible or liable for any alteration, modification, redistribution,
+or use of this plugin by any party, including but not limited to server
+owners, administrators, developers, or any other third party.
+
+By using this plugin, you acknowledge and agree that:
+
+  1. You use this plugin entirely at your own risk.
+  2. PlaySafe ID is not liable for any damages, losses, disruptions,
+     or issues arising from the use, misuse, modification, or
+     inability to use this plugin.
+  3. You are solely responsible for reviewing, testing, and validating
+     this plugin before deploying it on any server or environment.
+  4. Any modifications you make to this plugin are your own
+     responsibility. PlaySafe ID bears no liability for the
+     consequences of altered code.
+  5. This plugin interacts with the PlaySafe ID Community API, which
+     is subject to its own terms of service and usage policies.
+     Access to and use of the API is governed separately.
+
+This disclaimer applies regardless of whether the plugin is used in
+its original form or has been modified. If you do not agree with these
+terms, do not use this plugin.
