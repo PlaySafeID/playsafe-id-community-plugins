@@ -85,7 +85,7 @@ namespace Oxide.Plugins
             [JsonProperty("PlaySafe ID Community API Key")]
             public string ApiKey { get; set; } = "YOUR_COMMUNITY_API_KEY";
 
-            [JsonProperty("Game Code (for ban submissions)")]
+            [JsonProperty("Game Code (must match the code registered with PlaySafe ID)")]
             public string GameCode { get; set; } = "RUST";
 
             [JsonProperty("Periodic Re-check Interval (seconds)")]
@@ -763,6 +763,13 @@ namespace Oxide.Plugins
 
             webrequest.Enqueue(url, body, (code, response) =>
             {
+                if (code == 403)
+                    PrintWarning($"[PlaySafe ID] Game code '{_config.GameCode}' not found under your developer account (403). Check your config GameCode matches the code registered with PlaySafe ID.");
+                else if (code == 401)
+                    PrintWarning("[PlaySafe ID] Invalid or missing API key (401). Check your config.");
+                else if (code == 429)
+                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
+
                 callback?.Invoke(code >= 200 && code < 300, response ?? $"HTTP {code}");
             }, this, RequestMethod.POST, headers, _config.TimeoutSeconds);
         }
