@@ -702,6 +702,13 @@ namespace Oxide.Plugins
                     return;
                 }
 
+                if (code == 429)
+                {
+                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
+                    onError?.Invoke();
+                    return;
+                }
+
                 if (code < 200 || code >= 300 || string.IsNullOrEmpty(body))
                 {
                     PrintWarning($"[PlaySafe ID] Status check for {steamId} — HTTP {code}");
@@ -780,6 +787,13 @@ namespace Oxide.Plugins
             {
                 if (_config.LogEvents)
                     Puts($"[PlaySafe ID] Batch status response: HTTP {code}");
+
+                if (code == 429)
+                {
+                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
+                    onError?.Invoke();
+                    return;
+                }
 
                 if (code < 200 || code >= 300 || string.IsNullOrEmpty(response))
                 {
@@ -930,6 +944,13 @@ namespace Oxide.Plugins
                     return;
                 }
 
+                if (code == 429)
+                {
+                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
+                    onError?.Invoke("HTTP 429 — rate limited");
+                    return;
+                }
+
                 if (code < 200 || code >= 300 || string.IsNullOrEmpty(body))
                 {
                     PrintWarning($"[PlaySafe ID] Bans lookup for {steamId} — HTTP {code}: {body}");
@@ -1015,6 +1036,9 @@ namespace Oxide.Plugins
             {
                 if (_config.LogEvents)
                     Puts($"[PlaySafe ID] Overturn response: HTTP {code} — {response ?? "(empty)"}");
+
+                if (code == 429)
+                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
 
                 callback?.Invoke(code >= 200 && code < 300, response ?? $"HTTP {code}");
             }, this, RequestMethod.PATCH, headers, _config.TimeoutSeconds);
