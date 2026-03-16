@@ -846,8 +846,9 @@ namespace Oxide.Plugins
                         {
                             foreach (string entry in notFound)
                             {
-                                // Entry format is "STEAM:12345" — extract the ID
-                                string id = entry.Contains(":") ? entry.Split(':')[1] : entry;
+                                // Entry format is "STEAM:12345" — extract the ID after the colon
+                                int colonIdx = entry.IndexOf(':');
+                                string id = colonIdx >= 0 ? entry.Substring(colonIdx + 1) : entry;
                                 if (!result.ContainsKey(id))
                                     result[id] = null;
                             }
