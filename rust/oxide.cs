@@ -112,10 +112,7 @@ namespace Oxide.Plugins
             public bool FallbackAllowByGroup { get; set; } = true;
 
             [JsonProperty("Whitelisted SteamIDs (bypass all checks)")]
-            public List<string> WhitelistedSteamIds { get; set; } = new List<string>
-            {
-                "76561198000000000"
-            };
+            public List<string> WhitelistedSteamIds { get; set; } = new List<string>();
 
             [JsonProperty("Allow Oxide/Server Admins and Moderators to bypass checks")]
             public bool AllowAdminsAndModeratorsBypass { get; set; } = true;
