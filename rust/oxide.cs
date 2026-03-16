@@ -806,38 +806,23 @@ namespace Oxide.Plugins
 
                 try
                 {
-                    // Try parsing as a direct array first
-                    var bans = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(body);
-                    if (bans != null)
-                    {
-                        onResult?.Invoke(bans);
-                        return;
-                    }
-                }
-                catch { }
-
-                try
-                {
-                    // If not a direct array, try parsing as a wrapper object with common key names
                     var wrapper = JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
-                    if (wrapper != null)
+                    if (wrapper != null && wrapper.ContainsKey("bans") && wrapper["bans"] != null)
                     {
-                        // Try common wrapper keys: bans, data, items, results
-                        foreach (string key in new[] { "bans", "data", "items", "results" })
+                        var bans = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
+                            wrapper["bans"].ToString());
+                        if (bans != null)
                         {
-                            if (wrapper.ContainsKey(key) && wrapper[key] != null)
-                            {
-                                var bans = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(wrapper[key].ToString());
-                                if (bans != null)
-                                {
-                                    onResult?.Invoke(bans);
-                                    return;
-                                }
-                            }
+                            onResult?.Invoke(bans);
+                            return;
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    if (_config.LogEvents)
+                        Puts($"[PlaySafe ID] Parse error for bans response: {ex.Message}");
+                }
 
                 PrintWarning($"[PlaySafe ID] Could not parse bans response for {steamId}: {body}");
                 onError?.Invoke("Could not parse API response");
