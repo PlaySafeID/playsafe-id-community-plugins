@@ -1080,7 +1080,11 @@ namespace Oxide.Plugins
                     if (evidence != null && evidence.ContainsKey("reason"))
                         reason = evidence["reason"]?.ToString() ?? reason;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    if (_config.LogEvents)
+                        Puts($"[PlaySafe ID] Failed to parse evidence.reason: {ex.Message}");
+                }
             }
 
             // Fall back to reason field
@@ -1092,8 +1096,10 @@ namespace Oxide.Plugins
                     if (reasonObj != null && reasonObj.ContainsKey("reason"))
                         reason = reasonObj["reason"]?.ToString() ?? reason;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    if (_config.LogEvents)
+                        Puts($"[PlaySafe ID] Failed to parse reason as object, using raw value: {ex.Message}");
                     reason = ban["reason"]?.ToString() ?? reason;
                 }
             }
