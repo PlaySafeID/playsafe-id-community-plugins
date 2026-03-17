@@ -1,14 +1,14 @@
 # Community API Plugins
 
-This repo holds the community server plugins that we've initially vetted and link to in our documentation.
+This repo holds the community server plugins that PlaySafe ID has initially vetted and reference to in our [documentation](https://docs.playsafeid.com/docs/community-server-integration).
 
 > [!IMPORTANT]
 > #### **Disclaimer**
 > 
-> This plugin is provided as an optional community resource and is NOT an official PlaySafe ID product.
-> PlaySafe ID is not responsible for the creation, maintenance, or support of this plugin.
+> These plugins are provided as optional community resources and are NOT an official PlaySafe ID product.
+> PlaySafe ID is not responsible for the creation, maintenance, or support of these plugins.
 >
-> It is provided "as is" without warranty of any kind. PlaySafe ID shall not be held responsible or liable for any alteration, modification, or use of this plugin by any party.
-> You use this plugin entirely at your own risk. By deploying this plugin you acknowledge that you are solely responsible for reviewing, testing, and validating it before use.
+> They are provided "as is" without warranty of any kind. PlaySafe ID shall not be held responsible or liable for any alteration, modification, or use of these plugins by any party.
+> You use these plugins entirely at your own risk. By deploying any of these plugins you acknowledge that you are solely responsible for reviewing, testing, and validating them before use.
 >
 > Any modifications you make are your own responsibility. See the full disclaimer in the plugin source code.
