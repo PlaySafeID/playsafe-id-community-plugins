@@ -1,6 +1,6 @@
 // ===========================================================================
 // PlaySafe ID — Community Server Plugin for Rust (Oxide/uMod)
-// Version: 2.0.0
+// Version: 2.1.0
 // ===========================================================================
 //
 // DISCLAIMER
@@ -70,7 +70,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("PlaySafeID", "PlaySafe ID", "2.0.0")]
+    [Info("PlaySafeID", "PlaySafe ID", "2.1.0")]
     [Description("Enforces PlaySafe ID verification for all players on a Rust community server.")]
     public class PlaySafeID : RustPlugin
     {
@@ -188,7 +188,7 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             _recheckTimer = timer.Every(_config.RecheckIntervalSeconds, PeriodicRecheck);
-            Puts($"PlaySafe ID v2.0.0 loaded. Re-check every {_config.RecheckIntervalSeconds / 60f} min.");
+            Puts($"PlaySafe ID v2.1.0 loaded. Re-check every {_config.RecheckIntervalSeconds / 60f} min.");
         }
 
         private void Unload()
