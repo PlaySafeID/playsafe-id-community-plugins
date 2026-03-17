@@ -84,7 +84,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("PlaySafeID", "PlaySafe ID", "2.1.0")]
+    [Info("PlaySafeID", "PlaySafe ID", "2.2.0")]
     [Description("Enforces PlaySafe ID verification for all players on a Rust community server.")]
     public class PlaySafeID : RustPlugin
     {
