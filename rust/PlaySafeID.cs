@@ -1,6 +1,21 @@
 // ===========================================================================
 // PlaySafe ID — Community Server Plugin for Rust (Oxide/uMod)
-// Version: 2.1.0
+// ===========================================================================
+//
+// VERIFICATION
+//
+// To verify your copy matches the official release, compare MD5 hashes:
+//
+//   Linux:
+//     curl -sL https://raw.githubusercontent.com/PlaySafeID/playsafe-id-community-plugins/main/rust/PlaySafeID.cs | md5sum
+//     md5sum /path/to/your/oxide/plugins/PlaySafeID.cs
+//
+//   macOS:
+//     curl -sL https://raw.githubusercontent.com/PlaySafeID/playsafe-id-community-plugins/main/rust/PlaySafeID.cs | md5
+//     md5 /path/to/your/oxide/plugins/PlaySafeID.cs
+//
+// If the hashes match, your copy is identical to the official release.
+//
 // ===========================================================================
 //
 // DISCLAIMER
@@ -187,7 +202,7 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             _recheckTimer = timer.Every(_config.RecheckIntervalSeconds, PeriodicRecheck);
-            Puts($"PlaySafe ID v2.1.0 loaded. Re-check every {_config.RecheckIntervalSeconds / 60f} min.");
+            Puts($"PlaySafe ID v{Version} loaded. Re-check every {_config.RecheckIntervalSeconds / 60f} min.");
         }
 
         private void Unload()
