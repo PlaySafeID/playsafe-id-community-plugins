@@ -66,7 +66,7 @@
 //     configured Oxide group are allowed in; those without are denied
 //   - Admin/whitelist SteamID bypass
 //   - Silent kicks (no server chat announcement)
-//   - Admin command to submit community bans to the PlaySafe ID API
+//   - Automatic ban reporting via OnPlayerBanned hook
 //
 // Constraints (community guideline compliance):
 //   - Does NOT modify any game UI
@@ -84,7 +84,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("PlaySafeID", "PlaySafe ID", "2.2.0")]
+    [Info("PlaySafeID", "PlaySafe ID", "3.0.0")]
     [Description("Enforces PlaySafe ID verification for all players on a Rust community server.")]
     public class PlaySafeID : RustPlugin
     {
@@ -200,7 +200,6 @@ namespace Oxide.Plugins
                 permission.CreateGroup(_config.OxideGroupVerified, "PlaySafe ID Verified", 0);
             }
 
-            AddCovalenceCommand("psidban", nameof(CommandBan));
             AddCovalenceCommand("psidunban", nameof(CommandUnban));
         }
 
@@ -399,13 +398,9 @@ namespace Oxide.Plugins
                 return;
 
             string steamIdStr = steamId.ToString();
-            string banType = InferBanType(reason);
-            string reporter = InferReporter(reason);
 
             SubmitCommunityBan(
                 steamIdStr,
-                banType,
-                reporter,
                 reason,
                 null,
                 (success, resp) =>
@@ -418,109 +413,6 @@ namespace Oxide.Plugins
                         PrintWarning(
                             $"[PlaySafe ID] Failed to report ban for {name} ({steamIdStr}): {resp}"
                         );
-                }
-            );
-        }
-
-        #endregion
-
-        // ===================================================================
-        // ADMIN COMMAND: /psidban
-        // ===================================================================
-        #region Admin Command
-
-        /// <summary>
-        /// Usage: /psidban &lt;steamID&gt; &lt;type&gt; &lt;reason&gt;
-        ///
-        /// Types: CHEATING_SOFTWARE, CHEATING_BOTTING, CHEATING_HARDWARE,
-        ///        CHEATING_DMA, CHEATING_OTHER, CHILD_CSEA, CHILD_CSAM,
-        ///        CHILD_GROOMING, CHILD_OTHER
-        ///
-        /// Submits a community ban to the PlaySafe ID API and kicks the
-        /// player from this server if they are online.
-        /// </summary>
-        private void CommandBan(IPlayer caller, string command, string[] args)
-        {
-            if (!caller.IsAdmin)
-            {
-                caller.Reply("[PlaySafe ID] You do not have permission to use this command.");
-                return;
-            }
-
-            if (args.Length < 3)
-            {
-                caller.Reply("[PlaySafe ID] Usage: /psidban <steamID> <type> <reason>");
-                caller.Reply("  Types: CHEATING_SOFTWARE | CHEATING_BOTTING | CHEATING_HARDWARE");
-                caller.Reply("         CHEATING_DMA | CHEATING_OTHER | CHILD_CSEA | CHILD_CSAM");
-                caller.Reply("         CHILD_GROOMING | CHILD_OTHER");
-                return;
-            }
-
-            string targetSteamId = args[0];
-            string banType = args[1].ToUpper();
-            string reason = string.Join(" ", args.Skip(2));
-
-            // Validate SteamID
-            if (targetSteamId.Length != 17 || !ulong.TryParse(targetSteamId, out ulong targetId))
-            {
-                caller.Reply("[PlaySafe ID] Invalid SteamID. Must be a 17-digit Steam64 ID.");
-                return;
-            }
-
-            // Validate ban type
-            string[] validTypes =
-            {
-                "CHEATING_SOFTWARE",
-                "CHEATING_BOTTING",
-                "CHEATING_HARDWARE",
-                "CHEATING_DMA",
-                "CHEATING_OTHER",
-                "CHILD_CSEA",
-                "CHILD_CSAM",
-                "CHILD_GROOMING",
-                "CHILD_OTHER",
-            };
-
-            if (!validTypes.Contains(banType))
-            {
-                caller.Reply(
-                    $"[PlaySafe ID] Invalid ban type: {banType}. See /psidban for valid types."
-                );
-                return;
-            }
-
-            SubmitCommunityBan(
-                targetSteamId,
-                banType,
-                "COMMUNITY_ADMIN",
-                reason,
-                null,
-                (success, resp) =>
-                {
-                    if (success)
-                    {
-                        caller.Reply(
-                            $"[PlaySafe ID] Ban for {targetSteamId} submitted successfully."
-                        );
-                        Puts(
-                            $"[PlaySafe ID] Admin {caller.Name} banned {targetSteamId}. Type: {banType}. Reason: {reason}"
-                        );
-
-                        // Kick from this server if online
-                        BasePlayer target = BasePlayer.FindByID(targetId);
-                        if (target != null && target.IsConnected)
-                        {
-                            RemoveOxideGroup(targetSteamId);
-                            SilentKick(target, _config.KickMessageNotVerified);
-                        }
-                    }
-                    else
-                    {
-                        caller.Reply("[PlaySafe ID] Ban submission failed — check server logs.");
-                        PrintWarning(
-                            $"[PlaySafe ID] Ban submission failed for {targetSteamId}: {resp}"
-                        );
-                    }
                 }
             );
         }
@@ -626,9 +518,6 @@ namespace Oxide.Plugins
                             string banId = ban.ContainsKey("id")
                                 ? ban["id"]?.ToString()
                                 : "unknown";
-                            string banType = ban.ContainsKey("type")
-                                ? ban["type"]?.ToString()
-                                : "unknown";
                             string starts = ban.ContainsKey("startsAt")
                                 ? ban["startsAt"]?.ToString()
                                 : "unknown";
@@ -638,7 +527,7 @@ namespace Oxide.Plugins
 
                             string reason = ExtractBanReason(ban);
 
-                            caller.Reply($"  ({num}) {banType} | Game: {game} | Since: {starts}");
+                            caller.Reply($"  ({num}) Game: {game} | Since: {starts}");
                             caller.Reply($"      Reason: {reason}");
                             caller.Reply($"      ID: {banId}");
                             caller.Reply("  ───────────────────────────────────────────");
@@ -699,11 +588,8 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                string banType = selectedBan.ContainsKey("type")
-                    ? selectedBan["type"]?.ToString()
-                    : "unknown";
                 caller.Reply(
-                    $"[PlaySafe ID] Overturning ban ({banIndex}): {banType} — ID: {banId}..."
+                    $"[PlaySafe ID] Overturning ban ({banIndex}): ID: {banId}..."
                 );
 
                 OverturnCommunityBan(
@@ -1056,15 +942,12 @@ namespace Oxide.Plugins
         /// POST /v1/community/bans
         /// Header: X-Api-Key, Content-Type: application/json
         ///
-        /// Body: { platform, platformUserId, type, reporter, evidence: { reason },
-        ///         gameCode, startsAt, expiresAt }
+        /// Body: { platform, platformUserId, reason, gameCode, startsAt, expiresAt }
         ///
         /// 201 → Ban created successfully
         /// </summary>
         private void SubmitCommunityBan(
             string steamId,
-            string banType,
-            string reporter,
             string reason,
             string expiresAt,
             Action<bool, string> callback
@@ -1072,16 +955,12 @@ namespace Oxide.Plugins
         {
             string url = $"{API_BASE}/bans";
 
-            var evidence = new Dictionary<string, string> { { "reason", reason } };
 
             var payload = new Dictionary<string, object>
             {
                 { "platform", PLATFORM },
                 { "platformUserId", steamId },
-                { "type", banType },
-                { "reporter", reporter },
                 { "reason", reason },
-                { "evidence", evidence },
                 { "gameCode", _config.GameCode },
                 { "startsAt", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") },
                 { "expiresAt", expiresAt }, // null = permanent
@@ -1308,57 +1187,14 @@ namespace Oxide.Plugins
         #region Helpers
 
         /// <summary>
-        /// Extracts a human-readable reason from a ban object,
-        /// checking both evidence.reason and reason fields.
+        /// Extracts a human-readable reason from a ban object.
         /// </summary>
         private string ExtractBanReason(Dictionary<string, object> ban)
         {
-            string reason = "No reason provided";
+            if (ban.ContainsKey("reason") && ban["reason"] != null)
+                return ban["reason"]?.ToString() ?? "No reason provided";
 
-            // Try evidence.reason first
-            if (ban.ContainsKey("evidence") && ban["evidence"] != null)
-            {
-                try
-                {
-                    var evidence = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                        ban["evidence"].ToString()
-                    );
-                    if (evidence != null && evidence.ContainsKey("reason"))
-                        reason = evidence["reason"]?.ToString() ?? reason;
-                }
-                catch (Exception ex)
-                {
-                    if (_config.LogEvents)
-                        Puts($"[PlaySafe ID] Failed to parse evidence.reason: {ex.Message}");
-                }
-            }
-
-            // Fall back to reason field
-            if (
-                reason == "No reason provided"
-                && ban.ContainsKey("reason")
-                && ban["reason"] != null
-            )
-            {
-                try
-                {
-                    var reasonObj = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                        ban["reason"].ToString()
-                    );
-                    if (reasonObj != null && reasonObj.ContainsKey("reason"))
-                        reason = reasonObj["reason"]?.ToString() ?? reason;
-                }
-                catch (Exception ex)
-                {
-                    if (_config.LogEvents)
-                        Puts(
-                            $"[PlaySafe ID] Failed to parse reason as object, using raw value: {ex.Message}"
-                        );
-                    reason = ban["reason"]?.ToString() ?? reason;
-                }
-            }
-
-            return reason;
+            return "No reason provided";
         }
 
         private bool IsActiveStatus(string status)
@@ -1441,51 +1277,6 @@ namespace Oxide.Plugins
                 SilentKick(player, _config.KickMessageApiDown);
                 Log($"API unreachable — kicked {name} ({steamId}) (no fallback group).");
             }
-        }
-
-        /// <summary>
-        /// Best-effort detection of ban type from a ban reason string.
-        /// </summary>
-        private string InferBanType(string reason)
-        {
-            if (string.IsNullOrEmpty(reason))
-                return "CHEATING_OTHER";
-            string r = reason.ToUpper();
-
-            if (
-                r.Contains("EAC")
-                || r.Contains("EASY ANTI")
-                || r.Contains("HACK")
-                || r.Contains("CHEAT")
-            )
-                return "CHEATING_SOFTWARE";
-            if (r.Contains("BOT") || r.Contains("SCRIPT"))
-                return "CHEATING_BOTTING";
-            if (r.Contains("DMA"))
-                return "CHEATING_DMA";
-            if (r.Contains("HARDWARE") || r.Contains("HWID"))
-                return "CHEATING_HARDWARE";
-
-            return "CHEATING_OTHER";
-        }
-
-        /// <summary>
-        /// Best-effort detection of reporter from a ban reason string.
-        /// </summary>
-        private string InferReporter(string reason)
-        {
-            if (string.IsNullOrEmpty(reason))
-                return "OTHER";
-            string r = reason.ToUpper();
-
-            if (r.Contains("EAC") || r.Contains("EASY ANTI"))
-                return "EAC";
-            if (r.Contains("BATTLEYE"))
-                return "BATTLEYE";
-            if (r.Contains("VAC"))
-                return "VAC";
-
-            return "COMMUNITY_ADMIN";
         }
 
         private void Log(string message)
