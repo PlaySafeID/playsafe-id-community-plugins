@@ -97,7 +97,9 @@ namespace Oxide.Plugins
 
         private class PluginConfig
         {
-            [JsonProperty("PlaySafe ID Community API Key (stored in plain text — restrict file permissions on oxide/config/)")]
+            [JsonProperty(
+                "PlaySafe ID Community API Key (stored in plain text — restrict file permissions on oxide/config/)"
+            )]
             public string ApiKey { get; set; } = "YOUR_COMMUNITY_API_KEY";
 
             [JsonProperty("Game Code (must match the code registered with PlaySafe ID)")]
@@ -140,7 +142,9 @@ namespace Oxide.Plugins
         {
             _config = new PluginConfig();
             SaveConfig();
-            PrintWarning("Default configuration created. Set your Community API Key in oxide/config/PlaySafeID.json");
+            PrintWarning(
+                "Default configuration created. Set your Community API Key in oxide/config/PlaySafeID.json"
+            );
         }
 
         protected override void LoadConfig()
@@ -149,7 +153,8 @@ namespace Oxide.Plugins
             try
             {
                 _config = Config.ReadObject<PluginConfig>();
-                if (_config == null) throw new Exception();
+                if (_config == null)
+                    throw new Exception();
             }
             catch
             {
@@ -181,10 +186,10 @@ namespace Oxide.Plugins
 
         // Stores the last ban lookup per admin so they can reference bans by number
         // Key: admin ID (IPlayer.Id), Value: list of ban dictionaries from last lookup
-        private Dictionary<string, List<Dictionary<string, object>>> _banLookupCache
-            = new Dictionary<string, List<Dictionary<string, object>>>();
-        private Dictionary<string, DateTime> _banLookupTimestamps
-            = new Dictionary<string, DateTime>();
+        private Dictionary<string, List<Dictionary<string, object>>> _banLookupCache =
+            new Dictionary<string, List<Dictionary<string, object>>>();
+        private Dictionary<string, DateTime> _banLookupTimestamps =
+            new Dictionary<string, DateTime>();
         private const int BAN_CACHE_STALE_MINUTES = 5;
 
         private void Init()
@@ -202,7 +207,9 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             _recheckTimer = timer.Every(_config.RecheckIntervalSeconds, PeriodicRecheck);
-            Puts($"PlaySafe ID v{Version} loaded. Re-check every {_config.RecheckIntervalSeconds / 60f} min.");
+            Puts(
+                $"PlaySafe ID v{Version} loaded. Re-check every {_config.RecheckIntervalSeconds / 60f} min."
+            );
         }
 
         private void Unload()
@@ -229,7 +236,8 @@ namespace Oxide.Plugins
         /// </summary>
         private void OnPlayerConnected(BasePlayer player)
         {
-            if (player == null) return;
+            if (player == null)
+                return;
 
             string steamId = player.UserIDString;
             string name = player.displayName;
@@ -249,41 +257,50 @@ namespace Oxide.Plugins
             }
 
             // --- API check ---
-            GetUserStatus(steamId, (status) =>
-            {
-                try
+            GetUserStatus(
+                steamId,
+                (status) =>
                 {
-                    if (player == null || !player.IsConnected) return;
+                    try
+                    {
+                        if (player == null || !player.IsConnected)
+                            return;
 
-                    if (IsActiveStatus(status))
-                    {
-                        AssignOxideGroup(steamId);
-                        Log($"{name} ({steamId}) verified — status: {status}.");
+                        if (IsActiveStatus(status))
+                        {
+                            AssignOxideGroup(steamId);
+                            Log($"{name} ({steamId}) verified — status: {status}.");
+                        }
+                        else
+                        {
+                            RemoveOxideGroup(steamId);
+                            SilentKick(player, _config.KickMessageNotVerified);
+                            Log($"Kicked {name} ({steamId}) — status: {status ?? "NOT_FOUND"}.");
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        RemoveOxideGroup(steamId);
-                        SilentKick(player, _config.KickMessageNotVerified);
-                        Log($"Kicked {name} ({steamId}) — status: {status ?? "NOT_FOUND"}.");
+                        PrintWarning(
+                            $"[PlaySafe ID] Exception in status handler for {name} ({steamId}): {ex}"
+                        );
+                    }
+                },
+                () =>
+                {
+                    try
+                    {
+                        if (player == null || !player.IsConnected)
+                            return;
+                        HandleApiFallback(player, steamId, name);
+                    }
+                    catch (Exception ex)
+                    {
+                        PrintWarning(
+                            $"[PlaySafe ID] Exception in error handler for {name} ({steamId}): {ex}"
+                        );
                     }
                 }
-                catch (Exception ex)
-                {
-                    PrintWarning($"[PlaySafe ID] Exception in status handler for {name} ({steamId}): {ex}");
-                }
-            },
-            () =>
-            {
-                try
-                {
-                    if (player == null || !player.IsConnected) return;
-                    HandleApiFallback(player, steamId, name);
-                }
-                catch (Exception ex)
-                {
-                    PrintWarning($"[PlaySafe ID] Exception in error handler for {name} ({steamId}): {ex}");
-                }
-            });
+            );
         }
 
         #endregion
@@ -296,20 +313,25 @@ namespace Oxide.Plugins
         private void PeriodicRecheck()
         {
             var players = BasePlayer.activePlayerList;
-            if (players == null || players.Count == 0) return;
+            if (players == null || players.Count == 0)
+                return;
 
             // Collect eligible players (not whitelisted, not admin)
             var eligiblePlayers = new Dictionary<string, BasePlayer>();
             foreach (BasePlayer player in players.ToArray())
             {
-                if (player == null || !player.IsConnected) continue;
+                if (player == null || !player.IsConnected)
+                    continue;
                 string steamId = player.UserIDString;
-                if (IsWhitelisted(steamId)) continue;
-                if (_config.AllowAdminsAndModeratorsBypass && IsAdminOrModerator(player)) continue;
+                if (IsWhitelisted(steamId))
+                    continue;
+                if (_config.AllowAdminsAndModeratorsBypass && IsAdminOrModerator(player))
+                    continue;
                 eligiblePlayers[steamId] = player;
             }
 
-            if (eligiblePlayers.Count == 0) return;
+            if (eligiblePlayers.Count == 0)
+                return;
 
             Log($"Periodic re-check starting for {eligiblePlayers.Count} eligible player(s)...");
 
@@ -319,35 +341,44 @@ namespace Oxide.Plugins
             {
                 var chunk = steamIds.GetRange(i, Math.Min(BATCH_MAX_USERS, steamIds.Count - i));
 
-                BatchGetUserStatus(chunk, (results) =>
-                {
-                    foreach (var kvp in results)
+                BatchGetUserStatus(
+                    chunk,
+                    (results) =>
                     {
-                        string steamId = kvp.Key;
-                        string status = kvp.Value;
-
-                        if (!eligiblePlayers.ContainsKey(steamId)) continue;
-                        BasePlayer player = eligiblePlayers[steamId];
-                        if (player == null || !player.IsConnected) continue;
-
-                        if (IsActiveStatus(status))
+                        foreach (var kvp in results)
                         {
-                            AssignOxideGroup(steamId);
+                            string steamId = kvp.Key;
+                            string status = kvp.Value;
+
+                            if (!eligiblePlayers.ContainsKey(steamId))
+                                continue;
+                            BasePlayer player = eligiblePlayers[steamId];
+                            if (player == null || !player.IsConnected)
+                                continue;
+
+                            if (IsActiveStatus(status))
+                            {
+                                AssignOxideGroup(steamId);
+                            }
+                            else
+                            {
+                                RemoveOxideGroup(steamId);
+                                SilentKick(player, _config.KickMessageNotVerified);
+                                Log(
+                                    $"Periodic: Kicked {player.displayName} ({steamId}) — status: {status ?? "NOT_FOUND"}."
+                                );
+                            }
                         }
-                        else
-                        {
-                            RemoveOxideGroup(steamId);
-                            SilentKick(player, _config.KickMessageNotVerified);
-                            Log($"Periodic: Kicked {player.displayName} ({steamId}) — status: {status ?? "NOT_FOUND"}.");
-                        }
+                    },
+                    () =>
+                    {
+                        // During periodic checks, API failures skip the batch rather than
+                        // mass-kicking everyone during a brief outage.
+                        PrintWarning(
+                            "[PlaySafe ID] Periodic: Batch status check failed. Skipping batch."
+                        );
                     }
-                },
-                () =>
-                {
-                    // During periodic checks, API failures skip the batch rather than
-                    // mass-kicking everyone during a brief outage.
-                    PrintWarning("[PlaySafe ID] Periodic: Batch status check failed. Skipping batch.");
-                });
+                );
             }
         }
 
@@ -364,19 +395,31 @@ namespace Oxide.Plugins
         /// </summary>
         private void OnPlayerBanned(string name, ulong steamId, string address, string reason)
         {
-            if (string.IsNullOrEmpty(reason)) return;
+            if (string.IsNullOrEmpty(reason))
+                return;
 
             string steamIdStr = steamId.ToString();
             string banType = InferBanType(reason);
             string reporter = InferReporter(reason);
 
-            SubmitCommunityBan(steamIdStr, banType, reporter, reason, null, (success, resp) =>
-            {
-                if (success)
-                    Puts($"[PlaySafe ID] Ban for {name} ({steamIdStr}) reported to PlaySafe ID.");
-                else
-                    PrintWarning($"[PlaySafe ID] Failed to report ban for {name} ({steamIdStr}): {resp}");
-            });
+            SubmitCommunityBan(
+                steamIdStr,
+                banType,
+                reporter,
+                reason,
+                null,
+                (success, resp) =>
+                {
+                    if (success)
+                        Puts(
+                            $"[PlaySafe ID] Ban for {name} ({steamIdStr}) reported to PlaySafe ID."
+                        );
+                    else
+                        PrintWarning(
+                            $"[PlaySafe ID] Failed to report ban for {name} ({steamIdStr}): {resp}"
+                        );
+                }
+            );
         }
 
         #endregion
@@ -425,39 +468,61 @@ namespace Oxide.Plugins
             }
 
             // Validate ban type
-            string[] validTypes = {
-                "CHEATING_SOFTWARE", "CHEATING_BOTTING", "CHEATING_HARDWARE",
-                "CHEATING_DMA", "CHEATING_OTHER", "CHILD_CSEA", "CHILD_CSAM",
-                "CHILD_GROOMING", "CHILD_OTHER"
+            string[] validTypes =
+            {
+                "CHEATING_SOFTWARE",
+                "CHEATING_BOTTING",
+                "CHEATING_HARDWARE",
+                "CHEATING_DMA",
+                "CHEATING_OTHER",
+                "CHILD_CSEA",
+                "CHILD_CSAM",
+                "CHILD_GROOMING",
+                "CHILD_OTHER",
             };
 
             if (!validTypes.Contains(banType))
             {
-                caller.Reply($"[PlaySafe ID] Invalid ban type: {banType}. See /psidban for valid types.");
+                caller.Reply(
+                    $"[PlaySafe ID] Invalid ban type: {banType}. See /psidban for valid types."
+                );
                 return;
             }
 
-            SubmitCommunityBan(targetSteamId, banType, "COMMUNITY_ADMIN", reason, null, (success, resp) =>
-            {
-                if (success)
+            SubmitCommunityBan(
+                targetSteamId,
+                banType,
+                "COMMUNITY_ADMIN",
+                reason,
+                null,
+                (success, resp) =>
                 {
-                    caller.Reply($"[PlaySafe ID] Ban for {targetSteamId} submitted successfully.");
-                    Puts($"[PlaySafe ID] Admin {caller.Name} banned {targetSteamId}. Type: {banType}. Reason: {reason}");
-
-                    // Kick from this server if online
-                    BasePlayer target = BasePlayer.FindByID(targetId);
-                    if (target != null && target.IsConnected)
+                    if (success)
                     {
-                        RemoveOxideGroup(targetSteamId);
-                        SilentKick(target, _config.KickMessageNotVerified);
+                        caller.Reply(
+                            $"[PlaySafe ID] Ban for {targetSteamId} submitted successfully."
+                        );
+                        Puts(
+                            $"[PlaySafe ID] Admin {caller.Name} banned {targetSteamId}. Type: {banType}. Reason: {reason}"
+                        );
+
+                        // Kick from this server if online
+                        BasePlayer target = BasePlayer.FindByID(targetId);
+                        if (target != null && target.IsConnected)
+                        {
+                            RemoveOxideGroup(targetSteamId);
+                            SilentKick(target, _config.KickMessageNotVerified);
+                        }
+                    }
+                    else
+                    {
+                        caller.Reply("[PlaySafe ID] Ban submission failed — check server logs.");
+                        PrintWarning(
+                            $"[PlaySafe ID] Ban submission failed for {targetSteamId}: {resp}"
+                        );
                     }
                 }
-                else
-                {
-                    caller.Reply("[PlaySafe ID] Ban submission failed — check server logs.");
-                    PrintWarning($"[PlaySafe ID] Ban submission failed for {targetSteamId}: {resp}");
-                }
-            });
+            );
         }
 
         #endregion
@@ -487,7 +552,9 @@ namespace Oxide.Plugins
             {
                 caller.Reply("[PlaySafe ID] Usage:");
                 caller.Reply("  /psidunban <steamID>           — List active bans for a player");
-                caller.Reply("  /psidunban <#> <reason>        — Overturn ban # from the last lookup");
+                caller.Reply(
+                    "  /psidunban <#> <reason>        — Overturn ban # from the last lookup"
+                );
                 caller.Reply("  /psidunban <banID> <reason>    — Overturn by ban ID directly");
                 return;
             }
@@ -498,7 +565,8 @@ namespace Oxide.Plugins
             bool isSteamIdLookup = firstArg.Length == 17 && ulong.TryParse(firstArg, out _);
 
             // Detect mode: small number = index from last lookup
-            bool isNumberedIndex = int.TryParse(firstArg, out int banIndex) && banIndex > 0 && firstArg.Length < 5;
+            bool isNumberedIndex =
+                int.TryParse(firstArg, out int banIndex) && banIndex > 0 && firstArg.Length < 5;
 
             // ── STEP 1: Lookup bans by SteamID ──
             if (isSteamIdLookup && args.Length == 1)
@@ -506,69 +574,86 @@ namespace Oxide.Plugins
                 string steamId = firstArg;
                 caller.Reply($"[PlaySafe ID] Looking up bans for {steamId}...");
 
-                GetUserBans(steamId, (bans) =>
-                {
-                    if (bans == null || bans.Count == 0)
+                GetUserBans(
+                    steamId,
+                    (bans) =>
                     {
-                        caller.Reply($"[PlaySafe ID] No bans found for {steamId}.");
-                        _banLookupCache.Remove(caller.Id);
-                        _banLookupTimestamps.Remove(caller.Id);
-                        return;
-                    }
-
-                    // Filter to only ACTIVE bans
-                    var activeBans = new List<Dictionary<string, object>>();
-                    foreach (var ban in bans)
-                    {
-                        if (ban.ContainsKey("status") && ban["status"]?.ToString()?.ToUpper() == "ACTIVE")
+                        if (bans == null || bans.Count == 0)
                         {
-                            activeBans.Add(ban);
+                            caller.Reply($"[PlaySafe ID] No bans found for {steamId}.");
+                            _banLookupCache.Remove(caller.Id);
+                            _banLookupTimestamps.Remove(caller.Id);
+                            return;
                         }
-                    }
 
-                    if (activeBans.Count == 0)
-                    {
-                        caller.Reply($"[PlaySafe ID] No active bans found for {steamId}. ({bans.Count} overturned/expired ban(s) exist.)");
-                        _banLookupCache.Remove(caller.Id);
-                        _banLookupTimestamps.Remove(caller.Id);
-                        return;
-                    }
+                        // Filter to only ACTIVE bans
+                        var activeBans = new List<Dictionary<string, object>>();
+                        foreach (var ban in bans)
+                        {
+                            if (
+                                ban.ContainsKey("status")
+                                && ban["status"]?.ToString()?.ToUpper() == "ACTIVE"
+                            )
+                            {
+                                activeBans.Add(ban);
+                            }
+                        }
 
-                    // Cache the results and timestamp for this admin
-                    _banLookupCache[caller.Id] = activeBans;
-                    _banLookupTimestamps[caller.Id] = DateTime.UtcNow;
+                        if (activeBans.Count == 0)
+                        {
+                            caller.Reply(
+                                $"[PlaySafe ID] No active bans found for {steamId}. ({bans.Count} overturned/expired ban(s) exist.)"
+                            );
+                            _banLookupCache.Remove(caller.Id);
+                            _banLookupTimestamps.Remove(caller.Id);
+                            return;
+                        }
 
-                    caller.Reply($"[PlaySafe ID] Found {activeBans.Count} active ban(s) for {steamId} (looked up just now):");
-                    caller.Reply("  ───────────────────────────────────────────");
+                        // Cache the results and timestamp for this admin
+                        _banLookupCache[caller.Id] = activeBans;
+                        _banLookupTimestamps[caller.Id] = DateTime.UtcNow;
 
-                    for (int i = 0; i < activeBans.Count; i++)
-                    {
-                        var ban = activeBans[i];
-                        int num = i + 1;
-
-                        string banId = ban.ContainsKey("id") ? ban["id"]?.ToString() : "unknown";
-                        string banType = ban.ContainsKey("type") ? ban["type"]?.ToString() : "unknown";
-                        string starts = ban.ContainsKey("startsAt") ? ban["startsAt"]?.ToString() : "unknown";
-                        string game = ban.ContainsKey("gameCode") ? ban["gameCode"]?.ToString() : "unknown";
-
-                        string reason = ExtractBanReason(ban);
-
-                        caller.Reply($"  ({num}) {banType} | Game: {game} | Since: {starts}");
-                        caller.Reply($"      Reason: {reason}");
-                        caller.Reply($"      ID: {banId}");
+                        caller.Reply(
+                            $"[PlaySafe ID] Found {activeBans.Count} active ban(s) for {steamId} (looked up just now):"
+                        );
                         caller.Reply("  ───────────────────────────────────────────");
+
+                        for (int i = 0; i < activeBans.Count; i++)
+                        {
+                            var ban = activeBans[i];
+                            int num = i + 1;
+
+                            string banId = ban.ContainsKey("id")
+                                ? ban["id"]?.ToString()
+                                : "unknown";
+                            string banType = ban.ContainsKey("type")
+                                ? ban["type"]?.ToString()
+                                : "unknown";
+                            string starts = ban.ContainsKey("startsAt")
+                                ? ban["startsAt"]?.ToString()
+                                : "unknown";
+                            string game = ban.ContainsKey("gameCode")
+                                ? ban["gameCode"]?.ToString()
+                                : "unknown";
+
+                            string reason = ExtractBanReason(ban);
+
+                            caller.Reply($"  ({num}) {banType} | Game: {game} | Since: {starts}");
+                            caller.Reply($"      Reason: {reason}");
+                            caller.Reply($"      ID: {banId}");
+                            caller.Reply("  ───────────────────────────────────────────");
+                        }
+
+                        caller.Reply("[PlaySafe ID] To overturn a ban, run:");
+                        caller.Reply("  /psidunban <#> <reason for overturning>");
+                        caller.Reply("  Example: /psidunban 1 False positive confirmed");
+                    },
+                    (error) =>
+                    {
+                        caller.Reply($"[PlaySafe ID] Failed to look up bans: {error}");
                     }
-
-                    caller.Reply("[PlaySafe ID] To overturn a ban, run:");
-                    caller.Reply("  /psidunban <#> <reason for overturning>");
-                    caller.Reply("  Example: /psidunban 1 False positive confirmed");
-                },
-                (error) =>
-                {
-                    caller.Reply($"[PlaySafe ID] Failed to look up bans: {error}");
-                });
+                );
             }
-
             // ── STEP 2a: Overturn by numbered index from last lookup ──
             else if (isNumberedIndex && args.Length >= 2)
             {
@@ -576,7 +661,9 @@ namespace Oxide.Plugins
 
                 if (!_banLookupCache.ContainsKey(caller.Id) || _banLookupCache[caller.Id] == null)
                 {
-                    caller.Reply("[PlaySafe ID] No previous ban lookup found. Run /psidunban <steamID> first.");
+                    caller.Reply(
+                        "[PlaySafe ID] No previous ban lookup found. Run /psidunban <steamID> first."
+                    );
                     return;
                 }
 
@@ -585,14 +672,19 @@ namespace Oxide.Plugins
                 // Warn if using stale cached data
                 if (_banLookupTimestamps.ContainsKey(caller.Id))
                 {
-                    int minutesAgo = (int)(DateTime.UtcNow - _banLookupTimestamps[caller.Id]).TotalMinutes;
+                    int minutesAgo = (int)
+                        (DateTime.UtcNow - _banLookupTimestamps[caller.Id]).TotalMinutes;
                     if (minutesAgo >= BAN_CACHE_STALE_MINUTES)
-                        caller.Reply($"[PlaySafe ID] Warning: Ban data is from {minutesAgo} minutes ago. Run /psidunban <steamID> again for fresh results.");
+                        caller.Reply(
+                            $"[PlaySafe ID] Warning: Ban data is from {minutesAgo} minutes ago. Run /psidunban <steamID> again for fresh results."
+                        );
                 }
 
                 if (banIndex < 1 || banIndex > cachedBans.Count)
                 {
-                    caller.Reply($"[PlaySafe ID] Invalid selection. Choose a number between 1 and {cachedBans.Count}.");
+                    caller.Reply(
+                        $"[PlaySafe ID] Invalid selection. Choose a number between 1 and {cachedBans.Count}."
+                    );
                     return;
                 }
 
@@ -601,32 +693,46 @@ namespace Oxide.Plugins
 
                 if (string.IsNullOrEmpty(banId))
                 {
-                    caller.Reply("[PlaySafe ID] Could not determine ban ID. Try using the ban ID directly.");
+                    caller.Reply(
+                        "[PlaySafe ID] Could not determine ban ID. Try using the ban ID directly."
+                    );
                     return;
                 }
 
-                string banType = selectedBan.ContainsKey("type") ? selectedBan["type"]?.ToString() : "unknown";
-                caller.Reply($"[PlaySafe ID] Overturning ban ({banIndex}): {banType} — ID: {banId}...");
+                string banType = selectedBan.ContainsKey("type")
+                    ? selectedBan["type"]?.ToString()
+                    : "unknown";
+                caller.Reply(
+                    $"[PlaySafe ID] Overturning ban ({banIndex}): {banType} — ID: {banId}..."
+                );
 
-                OverturnCommunityBan(banId, reason, caller.Name, (success, response) =>
-                {
-                    if (success)
+                OverturnCommunityBan(
+                    banId,
+                    reason,
+                    caller.Name,
+                    (success, response) =>
                     {
-                        caller.Reply($"[PlaySafe ID] Ban ({banIndex}) has been overturned.");
-                        Puts($"[PlaySafe ID] Admin {caller.Name} overturned ban {banId}. Reason: {reason}");
+                        if (success)
+                        {
+                            caller.Reply($"[PlaySafe ID] Ban ({banIndex}) has been overturned.");
+                            Puts(
+                                $"[PlaySafe ID] Admin {caller.Name} overturned ban {banId}. Reason: {reason}"
+                            );
 
-                        // Remove from cache
-                        if (_banLookupCache.ContainsKey(caller.Id))
-                            _banLookupCache[caller.Id].RemoveAt(banIndex - 1);
+                            // Remove from cache
+                            if (_banLookupCache.ContainsKey(caller.Id))
+                                _banLookupCache[caller.Id].RemoveAt(banIndex - 1);
+                        }
+                        else
+                        {
+                            caller.Reply(
+                                $"[PlaySafe ID] Failed to overturn ban ({banIndex}) — check server logs."
+                            );
+                            PrintWarning($"[PlaySafe ID] Overturn failed for {banId}: {response}");
+                        }
                     }
-                    else
-                    {
-                        caller.Reply($"[PlaySafe ID] Failed to overturn ban ({banIndex}) — check server logs.");
-                        PrintWarning($"[PlaySafe ID] Overturn failed for {banId}: {response}");
-                    }
-                });
+                );
             }
-
             // ── STEP 2b: Overturn by direct ban ID ──
             else if (!isSteamIdLookup && !isNumberedIndex && args.Length >= 2)
             {
@@ -635,32 +741,44 @@ namespace Oxide.Plugins
 
                 caller.Reply($"[PlaySafe ID] Overturning ban {banId}...");
 
-                OverturnCommunityBan(banId, reason, caller.Name, (success, response) =>
-                {
-                    if (success)
+                OverturnCommunityBan(
+                    banId,
+                    reason,
+                    caller.Name,
+                    (success, response) =>
                     {
-                        caller.Reply($"[PlaySafe ID] Ban {banId} has been overturned.");
-                        Puts($"[PlaySafe ID] Admin {caller.Name} overturned ban {banId}. Reason: {reason}");
+                        if (success)
+                        {
+                            caller.Reply($"[PlaySafe ID] Ban {banId} has been overturned.");
+                            Puts(
+                                $"[PlaySafe ID] Admin {caller.Name} overturned ban {banId}. Reason: {reason}"
+                            );
+                        }
+                        else
+                        {
+                            caller.Reply(
+                                $"[PlaySafe ID] Failed to overturn ban {banId} — check server logs."
+                            );
+                            PrintWarning($"[PlaySafe ID] Overturn failed for {banId}: {response}");
+                        }
                     }
-                    else
-                    {
-                        caller.Reply($"[PlaySafe ID] Failed to overturn ban {banId} — check server logs.");
-                        PrintWarning($"[PlaySafe ID] Overturn failed for {banId}: {response}");
-                    }
-                });
+                );
             }
-
             // ── Error: SteamID with extra args ──
             else if (isSteamIdLookup && args.Length >= 2)
             {
-                caller.Reply("[PlaySafe ID] To overturn, use a ban number or ban ID (not SteamID).");
+                caller.Reply(
+                    "[PlaySafe ID] To overturn, use a ban number or ban ID (not SteamID)."
+                );
                 caller.Reply($"  Run /psidunban {firstArg} first to list bans.");
             }
             else
             {
                 caller.Reply("[PlaySafe ID] Usage:");
                 caller.Reply("  /psidunban <steamID>           — List active bans for a player");
-                caller.Reply("  /psidunban <#> <reason>        — Overturn ban # from the last lookup");
+                caller.Reply(
+                    "  /psidunban <#> <reason>        — Overturn ban # from the last lookup"
+                );
                 caller.Reply("  /psidunban <banID> <reason>    — Overturn by ban ID directly");
             }
         }
@@ -692,79 +810,99 @@ namespace Oxide.Plugins
             var headers = new Dictionary<string, string>
             {
                 { "X-Api-Key", _config.ApiKey },
-                { "Accept", "application/json" }
+                { "Accept", "application/json" },
             };
 
-            webrequest.Enqueue(url, null, (code, body) =>
-            {
-                // Log every API response for debugging
-                if (_config.LogEvents)
-                    Puts($"[PlaySafe ID] Status API response for {steamId}: HTTP {code} — Body: {body ?? "(empty)"}");
-
-                if (code == 404)
+            webrequest.Enqueue(
+                url,
+                null,
+                (code, body) =>
                 {
-                    // User does not exist in PlaySafe ID
-                    onResult?.Invoke(null);
-                    return;
-                }
+                    // Log every API response for debugging
+                    if (_config.LogEvents)
+                        Puts(
+                            $"[PlaySafe ID] Status API response for {steamId}: HTTP {code} — Body: {body ?? "(empty)"}"
+                        );
 
-                if (code == 500)
-                {
-                    PrintWarning($"[PlaySafe ID] Server error (500) from API for {steamId}. This is a PlaySafe ID server-side issue.");
-                    onError?.Invoke();
-                    return;
-                }
-
-                if (code == 401)
-                {
-                    PrintWarning($"[PlaySafe ID] Invalid or missing API key (401). Check your config.");
-                    onError?.Invoke();
-                    return;
-                }
-
-                if (code == 403)
-                {
-                    PrintWarning($"[PlaySafe ID] Community provider account is inactive (403). Contact PlaySafe ID.");
-                    onError?.Invoke();
-                    return;
-                }
-
-                if (code == 429)
-                {
-                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
-                    onError?.Invoke();
-                    return;
-                }
-
-                if (code < 200 || code >= 300 || string.IsNullOrEmpty(body))
-                {
-                    PrintWarning($"[PlaySafe ID] Status check for {steamId} — HTTP {code}");
-                    onError?.Invoke();
-                    return;
-                }
-
-                try
-                {
-                    var data = JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
-                    if (data != null && data.ContainsKey("status"))
+                    if (code == 404)
                     {
-                        string status = data["status"]?.ToString();
-                        if (_config.LogEvents)
-                            Puts($"[PlaySafe ID] Parsed status for {steamId}: {status}");
-                        onResult?.Invoke(status);
+                        // User does not exist in PlaySafe ID
+                        onResult?.Invoke(null);
+                        return;
                     }
-                    else
+
+                    if (code == 500)
                     {
-                        PrintWarning($"[PlaySafe ID] Unexpected response for {steamId}: {body}");
+                        PrintWarning(
+                            $"[PlaySafe ID] Server error (500) from API for {steamId}. This is a PlaySafe ID server-side issue."
+                        );
+                        onError?.Invoke();
+                        return;
+                    }
+
+                    if (code == 401)
+                    {
+                        PrintWarning(
+                            $"[PlaySafe ID] Invalid or missing API key (401). Check your config."
+                        );
+                        onError?.Invoke();
+                        return;
+                    }
+
+                    if (code == 403)
+                    {
+                        PrintWarning(
+                            $"[PlaySafe ID] Community provider account is inactive (403). Contact PlaySafe ID."
+                        );
+                        onError?.Invoke();
+                        return;
+                    }
+
+                    if (code == 429)
+                    {
+                        PrintWarning(
+                            "[PlaySafe ID] Rate limited (429). Too many requests — try again shortly."
+                        );
+                        onError?.Invoke();
+                        return;
+                    }
+
+                    if (code < 200 || code >= 300 || string.IsNullOrEmpty(body))
+                    {
+                        PrintWarning($"[PlaySafe ID] Status check for {steamId} — HTTP {code}");
+                        onError?.Invoke();
+                        return;
+                    }
+
+                    try
+                    {
+                        var data = JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
+                        if (data != null && data.ContainsKey("status"))
+                        {
+                            string status = data["status"]?.ToString();
+                            if (_config.LogEvents)
+                                Puts($"[PlaySafe ID] Parsed status for {steamId}: {status}");
+                            onResult?.Invoke(status);
+                        }
+                        else
+                        {
+                            PrintWarning(
+                                $"[PlaySafe ID] Unexpected response for {steamId}: {body}"
+                            );
+                            onError?.Invoke();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        PrintWarning($"[PlaySafe ID] JSON parse error for {steamId}: {ex.Message}");
                         onError?.Invoke();
                     }
-                }
-                catch (Exception ex)
-                {
-                    PrintWarning($"[PlaySafe ID] JSON parse error for {steamId}: {ex.Message}");
-                    onError?.Invoke();
-                }
-            }, this, RequestMethod.GET, headers, _config.TimeoutSeconds);
+                },
+                this,
+                RequestMethod.GET,
+                headers,
+                _config.TimeoutSeconds
+            );
         }
 
         #endregion
@@ -782,8 +920,11 @@ namespace Oxide.Plugins
         ///
         /// Returns a dictionary mapping steamId -> status (null for not-found users).
         /// </summary>
-        private void BatchGetUserStatus(List<string> steamIds,
-            Action<Dictionary<string, string>> onResult, Action onError)
+        private void BatchGetUserStatus(
+            List<string> steamIds,
+            Action<Dictionary<string, string>> onResult,
+            Action onError
+        )
         {
             if (steamIds == null || steamIds.Count == 0)
             {
@@ -804,80 +945,107 @@ namespace Oxide.Plugins
             {
                 { "X-Api-Key", _config.ApiKey },
                 { "Content-Type", "application/json" },
-                { "Accept", "application/json" }
+                { "Accept", "application/json" },
             };
 
             if (_config.LogEvents)
-                Puts($"[PlaySafe ID] Batch status request for {steamIds.Count} user(s): POST {url}");
+                Puts(
+                    $"[PlaySafe ID] Batch status request for {steamIds.Count} user(s): POST {url}"
+                );
 
-            webrequest.Enqueue(url, body, (code, response) =>
-            {
-                if (_config.LogEvents)
-                    Puts($"[PlaySafe ID] Batch status response: HTTP {code}");
-
-                if (code == 429)
+            webrequest.Enqueue(
+                url,
+                body,
+                (code, response) =>
                 {
-                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
-                    onError?.Invoke();
-                    return;
-                }
+                    if (_config.LogEvents)
+                        Puts($"[PlaySafe ID] Batch status response: HTTP {code}");
 
-                if (code < 200 || code >= 300 || string.IsNullOrEmpty(response))
-                {
-                    PrintWarning($"[PlaySafe ID] Batch status check — HTTP {code}: {response}");
-                    onError?.Invoke();
-                    return;
-                }
-
-                try
-                {
-                    var wrapper = JsonConvert.DeserializeObject<Dictionary<string, object>>(response);
-                    var result = new Dictionary<string, string>();
-
-                    if (wrapper != null && wrapper.ContainsKey("users") && wrapper["users"] != null)
+                    if (code == 429)
                     {
-                        var usersResult = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
-                            wrapper["users"].ToString());
-                        if (usersResult != null)
-                        {
-                            foreach (var user in usersResult)
-                            {
-                                string userId = user.ContainsKey("platformUserId")
-                                    ? user["platformUserId"]?.ToString() : null;
-                                string status = user.ContainsKey("status")
-                                    ? user["status"]?.ToString() : null;
-                                if (userId != null)
-                                    result[userId] = status;
-                            }
-                        }
+                        PrintWarning(
+                            "[PlaySafe ID] Rate limited (429). Too many requests — try again shortly."
+                        );
+                        onError?.Invoke();
+                        return;
                     }
 
-                    // Mark not-found users with null status
-                    if (wrapper != null && wrapper.ContainsKey("notFound") && wrapper["notFound"] != null)
+                    if (code < 200 || code >= 300 || string.IsNullOrEmpty(response))
                     {
-                        var notFound = JsonConvert.DeserializeObject<List<string>>(
-                            wrapper["notFound"].ToString());
-                        if (notFound != null)
-                        {
-                            foreach (string entry in notFound)
-                            {
-                                // Entry format is "STEAM:12345" — extract the ID after the colon
-                                int colonIdx = entry.IndexOf(':');
-                                string id = colonIdx >= 0 ? entry.Substring(colonIdx + 1) : entry;
-                                if (!result.ContainsKey(id))
-                                    result[id] = null;
-                            }
-                        }
+                        PrintWarning($"[PlaySafe ID] Batch status check — HTTP {code}: {response}");
+                        onError?.Invoke();
+                        return;
                     }
 
-                    onResult?.Invoke(result);
-                }
-                catch (Exception ex)
-                {
-                    PrintWarning($"[PlaySafe ID] Batch status parse error: {ex.Message}");
-                    onError?.Invoke();
-                }
-            }, this, RequestMethod.POST, headers, _config.TimeoutSeconds);
+                    try
+                    {
+                        var wrapper = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                            response
+                        );
+                        var result = new Dictionary<string, string>();
+
+                        if (
+                            wrapper != null
+                            && wrapper.ContainsKey("users")
+                            && wrapper["users"] != null
+                        )
+                        {
+                            var usersResult = JsonConvert.DeserializeObject<
+                                List<Dictionary<string, object>>
+                            >(wrapper["users"].ToString());
+                            if (usersResult != null)
+                            {
+                                foreach (var user in usersResult)
+                                {
+                                    string userId = user.ContainsKey("platformUserId")
+                                        ? user["platformUserId"]?.ToString()
+                                        : null;
+                                    string status = user.ContainsKey("status")
+                                        ? user["status"]?.ToString()
+                                        : null;
+                                    if (userId != null)
+                                        result[userId] = status;
+                                }
+                            }
+                        }
+
+                        // Mark not-found users with null status
+                        if (
+                            wrapper != null
+                            && wrapper.ContainsKey("notFound")
+                            && wrapper["notFound"] != null
+                        )
+                        {
+                            var notFound = JsonConvert.DeserializeObject<List<string>>(
+                                wrapper["notFound"].ToString()
+                            );
+                            if (notFound != null)
+                            {
+                                foreach (string entry in notFound)
+                                {
+                                    // Entry format is "STEAM:12345" — extract the ID after the colon
+                                    int colonIdx = entry.IndexOf(':');
+                                    string id =
+                                        colonIdx >= 0 ? entry.Substring(colonIdx + 1) : entry;
+                                    if (!result.ContainsKey(id))
+                                        result[id] = null;
+                                }
+                            }
+                        }
+
+                        onResult?.Invoke(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        PrintWarning($"[PlaySafe ID] Batch status parse error: {ex.Message}");
+                        onError?.Invoke();
+                    }
+                },
+                this,
+                RequestMethod.POST,
+                headers,
+                _config.TimeoutSeconds
+            );
         }
 
         #endregion
@@ -893,15 +1061,18 @@ namespace Oxide.Plugins
         ///
         /// 201 → Ban created successfully
         /// </summary>
-        private void SubmitCommunityBan(string steamId, string banType, string reporter,
-            string reason, string expiresAt, Action<bool, string> callback)
+        private void SubmitCommunityBan(
+            string steamId,
+            string banType,
+            string reporter,
+            string reason,
+            string expiresAt,
+            Action<bool, string> callback
+        )
         {
             string url = $"{API_BASE}/bans";
 
-            var evidence = new Dictionary<string, string>
-            {
-                { "reason", reason }
-            };
+            var evidence = new Dictionary<string, string> { { "reason", reason } };
 
             var payload = new Dictionary<string, object>
             {
@@ -913,7 +1084,7 @@ namespace Oxide.Plugins
                 { "evidence", evidence },
                 { "gameCode", _config.GameCode },
                 { "startsAt", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") },
-                { "expiresAt", expiresAt }  // null = permanent
+                { "expiresAt", expiresAt }, // null = permanent
             };
 
             string body = JsonConvert.SerializeObject(payload);
@@ -922,20 +1093,34 @@ namespace Oxide.Plugins
             {
                 { "X-Api-Key", _config.ApiKey },
                 { "Content-Type", "application/json" },
-                { "Accept", "application/json" }
+                { "Accept", "application/json" },
             };
 
-            webrequest.Enqueue(url, body, (code, response) =>
-            {
-                if (code == 403)
-                    PrintWarning($"[PlaySafe ID] Game code '{_config.GameCode}' not found under your developer account (403). Check your config GameCode matches the code registered with PlaySafe ID.");
-                else if (code == 401)
-                    PrintWarning("[PlaySafe ID] Invalid or missing API key (401). Check your config.");
-                else if (code == 429)
-                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
+            webrequest.Enqueue(
+                url,
+                body,
+                (code, response) =>
+                {
+                    if (code == 403)
+                        PrintWarning(
+                            $"[PlaySafe ID] Game code '{_config.GameCode}' not found under your developer account (403). Check your config GameCode matches the code registered with PlaySafe ID."
+                        );
+                    else if (code == 401)
+                        PrintWarning(
+                            "[PlaySafe ID] Invalid or missing API key (401). Check your config."
+                        );
+                    else if (code == 429)
+                        PrintWarning(
+                            "[PlaySafe ID] Rate limited (429). Too many requests — try again shortly."
+                        );
 
-                callback?.Invoke(code >= 200 && code < 300, response ?? $"HTTP {code}");
-            }, this, RequestMethod.POST, headers, _config.TimeoutSeconds);
+                    callback?.Invoke(code >= 200 && code < 300, response ?? $"HTTP {code}");
+                },
+                this,
+                RequestMethod.POST,
+                headers,
+                _config.TimeoutSeconds
+            );
         }
 
         #endregion
@@ -949,8 +1134,13 @@ namespace Oxide.Plugins
         /// Returns all community bans for the specified user, paginating
         /// automatically when the total exceeds one page.
         /// </summary>
-        private void GetUserBans(string steamId, Action<List<Dictionary<string, object>>> onResult,
-            Action<string> onError, int page = 1, List<Dictionary<string, object>> accumulated = null)
+        private void GetUserBans(
+            string steamId,
+            Action<List<Dictionary<string, object>>> onResult,
+            Action<string> onError,
+            int page = 1,
+            List<Dictionary<string, object>> accumulated = null
+        )
         {
             const int PAGE_SIZE = 100;
             string url = $"{API_BASE}/bans/user/{PLATFORM}/{steamId}?limit={PAGE_SIZE}&page={page}";
@@ -961,69 +1151,90 @@ namespace Oxide.Plugins
             var headers = new Dictionary<string, string>
             {
                 { "X-Api-Key", _config.ApiKey },
-                { "Accept", "application/json" }
+                { "Accept", "application/json" },
             };
 
-            webrequest.Enqueue(url, null, (code, body) =>
-            {
-                if (code == 404)
+            webrequest.Enqueue(
+                url,
+                null,
+                (code, body) =>
                 {
-                    onResult?.Invoke(accumulated ?? new List<Dictionary<string, object>>());
-                    return;
-                }
-
-                if (code == 429)
-                {
-                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
-                    onError?.Invoke("HTTP 429 — rate limited");
-                    return;
-                }
-
-                if (code < 200 || code >= 300 || string.IsNullOrEmpty(body))
-                {
-                    PrintWarning($"[PlaySafe ID] Bans lookup for {steamId} — HTTP {code}: {body}");
-                    onError?.Invoke($"HTTP {code}");
-                    return;
-                }
-
-                try
-                {
-                    var wrapper = JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
-                    if (wrapper != null && wrapper.ContainsKey("bans") && wrapper["bans"] != null)
+                    if (code == 404)
                     {
-                        var bans = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(
-                            wrapper["bans"].ToString());
-                        if (bans != null)
+                        onResult?.Invoke(accumulated ?? new List<Dictionary<string, object>>());
+                        return;
+                    }
+
+                    if (code == 429)
+                    {
+                        PrintWarning(
+                            "[PlaySafe ID] Rate limited (429). Too many requests — try again shortly."
+                        );
+                        onError?.Invoke("HTTP 429 — rate limited");
+                        return;
+                    }
+
+                    if (code < 200 || code >= 300 || string.IsNullOrEmpty(body))
+                    {
+                        PrintWarning(
+                            $"[PlaySafe ID] Bans lookup for {steamId} — HTTP {code}: {body}"
+                        );
+                        onError?.Invoke($"HTTP {code}");
+                        return;
+                    }
+
+                    try
+                    {
+                        var wrapper = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                            body
+                        );
+                        if (
+                            wrapper != null
+                            && wrapper.ContainsKey("bans")
+                            && wrapper["bans"] != null
+                        )
                         {
-                            if (accumulated == null)
-                                accumulated = new List<Dictionary<string, object>>();
-                            accumulated.AddRange(bans);
-
-                            // Check if more pages exist
-                            int total = 0;
-                            if (wrapper.ContainsKey("total"))
-                                int.TryParse(wrapper["total"]?.ToString(), out total);
-
-                            if (total > page * PAGE_SIZE)
+                            var bans = JsonConvert.DeserializeObject<
+                                List<Dictionary<string, object>>
+                            >(wrapper["bans"].ToString());
+                            if (bans != null)
                             {
-                                GetUserBans(steamId, onResult, onError, page + 1, accumulated);
+                                if (accumulated == null)
+                                    accumulated = new List<Dictionary<string, object>>();
+                                accumulated.AddRange(bans);
+
+                                // Check if more pages exist
+                                int total = 0;
+                                if (wrapper.ContainsKey("total"))
+                                    int.TryParse(wrapper["total"]?.ToString(), out total);
+
+                                if (total > page * PAGE_SIZE)
+                                {
+                                    GetUserBans(steamId, onResult, onError, page + 1, accumulated);
+                                    return;
+                                }
+
+                                onResult?.Invoke(accumulated);
                                 return;
                             }
-
-                            onResult?.Invoke(accumulated);
-                            return;
                         }
                     }
-                }
-                catch (Exception ex)
-                {
-                    if (_config.LogEvents)
-                        Puts($"[PlaySafe ID] Parse error for bans response: {ex.Message}");
-                }
+                    catch (Exception ex)
+                    {
+                        if (_config.LogEvents)
+                            Puts($"[PlaySafe ID] Parse error for bans response: {ex.Message}");
+                    }
 
-                PrintWarning($"[PlaySafe ID] Could not parse bans response for {steamId}: {body}");
-                onError?.Invoke("Could not parse API response");
-            }, this, RequestMethod.GET, headers, _config.TimeoutSeconds);
+                    PrintWarning(
+                        $"[PlaySafe ID] Could not parse bans response for {steamId}: {body}"
+                    );
+                    onError?.Invoke("Could not parse API response");
+                },
+                this,
+                RequestMethod.GET,
+                headers,
+                _config.TimeoutSeconds
+            );
         }
 
         #endregion
@@ -1038,7 +1249,12 @@ namespace Oxide.Plugins
         ///
         /// 200 → Ban overturned successfully
         /// </summary>
-        private void OverturnCommunityBan(string banId, string reason, string overturnedBy, Action<bool, string> callback)
+        private void OverturnCommunityBan(
+            string banId,
+            string reason,
+            string overturnedBy,
+            Action<bool, string> callback
+        )
         {
             string url = $"{API_BASE}/bans/{banId}";
 
@@ -1048,7 +1264,7 @@ namespace Oxide.Plugins
             var payload = new Dictionary<string, string>
             {
                 { "reason", reason },
-                { "overturnedBy", overturnedBy }
+                { "overturnedBy", overturnedBy },
             };
 
             string body = JsonConvert.SerializeObject(payload);
@@ -1057,19 +1273,31 @@ namespace Oxide.Plugins
             {
                 { "X-Api-Key", _config.ApiKey },
                 { "Content-Type", "application/json" },
-                { "Accept", "application/json" }
+                { "Accept", "application/json" },
             };
 
-            webrequest.Enqueue(url, body, (code, response) =>
-            {
-                if (_config.LogEvents)
-                    Puts($"[PlaySafe ID] Overturn response: HTTP {code} — {response ?? "(empty)"}");
+            webrequest.Enqueue(
+                url,
+                body,
+                (code, response) =>
+                {
+                    if (_config.LogEvents)
+                        Puts(
+                            $"[PlaySafe ID] Overturn response: HTTP {code} — {response ?? "(empty)"}"
+                        );
 
-                if (code == 429)
-                    PrintWarning("[PlaySafe ID] Rate limited (429). Too many requests — try again shortly.");
+                    if (code == 429)
+                        PrintWarning(
+                            "[PlaySafe ID] Rate limited (429). Too many requests — try again shortly."
+                        );
 
-                callback?.Invoke(code >= 200 && code < 300, response ?? $"HTTP {code}");
-            }, this, RequestMethod.PATCH, headers, _config.TimeoutSeconds);
+                    callback?.Invoke(code >= 200 && code < 300, response ?? $"HTTP {code}");
+                },
+                this,
+                RequestMethod.PATCH,
+                headers,
+                _config.TimeoutSeconds
+            );
         }
 
         #endregion
@@ -1092,7 +1320,9 @@ namespace Oxide.Plugins
             {
                 try
                 {
-                    var evidence = JsonConvert.DeserializeObject<Dictionary<string, object>>(ban["evidence"].ToString());
+                    var evidence = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                        ban["evidence"].ToString()
+                    );
                     if (evidence != null && evidence.ContainsKey("reason"))
                         reason = evidence["reason"]?.ToString() ?? reason;
                 }
@@ -1104,18 +1334,26 @@ namespace Oxide.Plugins
             }
 
             // Fall back to reason field
-            if (reason == "No reason provided" && ban.ContainsKey("reason") && ban["reason"] != null)
+            if (
+                reason == "No reason provided"
+                && ban.ContainsKey("reason")
+                && ban["reason"] != null
+            )
             {
                 try
                 {
-                    var reasonObj = JsonConvert.DeserializeObject<Dictionary<string, object>>(ban["reason"].ToString());
+                    var reasonObj = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                        ban["reason"].ToString()
+                    );
                     if (reasonObj != null && reasonObj.ContainsKey("reason"))
                         reason = reasonObj["reason"]?.ToString() ?? reason;
                 }
                 catch (Exception ex)
                 {
                     if (_config.LogEvents)
-                        Puts($"[PlaySafe ID] Failed to parse reason as object, using raw value: {ex.Message}");
+                        Puts(
+                            $"[PlaySafe ID] Failed to parse reason as object, using raw value: {ex.Message}"
+                        );
                     reason = ban["reason"]?.ToString() ?? reason;
                 }
             }
@@ -1125,14 +1363,14 @@ namespace Oxide.Plugins
 
         private bool IsActiveStatus(string status)
         {
-            return !string.IsNullOrEmpty(status) &&
-                   status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase);
+            return !string.IsNullOrEmpty(status)
+                && status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool IsWhitelisted(string steamId)
         {
-            return _config.WhitelistedSteamIds != null &&
-                   _config.WhitelistedSteamIds.Contains(steamId);
+            return _config.WhitelistedSteamIds != null
+                && _config.WhitelistedSteamIds.Contains(steamId);
         }
 
         /// <summary>
@@ -1141,7 +1379,8 @@ namespace Oxide.Plugins
         /// </summary>
         private bool IsAdminOrModerator(BasePlayer player)
         {
-            if (player == null) return false;
+            if (player == null)
+                return false;
             return player.IsAdmin || player.net?.connection?.authLevel >= 1;
         }
 
@@ -1152,13 +1391,15 @@ namespace Oxide.Plugins
         /// </summary>
         private void SilentKick(BasePlayer player, string reason)
         {
-            if (player == null || !player.IsConnected) return;
+            if (player == null || !player.IsConnected)
+                return;
             player.Kick(reason);
         }
 
         private void AssignOxideGroup(string steamId)
         {
-            if (string.IsNullOrEmpty(_config.OxideGroupVerified)) return;
+            if (string.IsNullOrEmpty(_config.OxideGroupVerified))
+                return;
             if (!permission.UserHasGroup(steamId, _config.OxideGroupVerified))
             {
                 permission.AddUserGroup(steamId, _config.OxideGroupVerified);
@@ -1167,8 +1408,10 @@ namespace Oxide.Plugins
 
         private void RemoveOxideGroup(string steamId)
         {
-            if (string.IsNullOrEmpty(_config.OxideGroupVerified)) return;
-            if (!_config.RemoveGroupOnFail) return;
+            if (string.IsNullOrEmpty(_config.OxideGroupVerified))
+                return;
+            if (!_config.RemoveGroupOnFail)
+                return;
             if (permission.UserHasGroup(steamId, _config.OxideGroupVerified))
             {
                 permission.RemoveUserGroup(steamId, _config.OxideGroupVerified);
@@ -1183,11 +1426,15 @@ namespace Oxide.Plugins
         /// </summary>
         private void HandleApiFallback(BasePlayer player, string steamId, string name)
         {
-            if (_config.FallbackAllowByGroup &&
-                !string.IsNullOrEmpty(_config.OxideGroupVerified) &&
-                permission.UserHasGroup(steamId, _config.OxideGroupVerified))
+            if (
+                _config.FallbackAllowByGroup
+                && !string.IsNullOrEmpty(_config.OxideGroupVerified)
+                && permission.UserHasGroup(steamId, _config.OxideGroupVerified)
+            )
             {
-                Log($"API unreachable — {name} ({steamId}) allowed via fallback (has verified group).");
+                Log(
+                    $"API unreachable — {name} ({steamId}) allowed via fallback (has verified group)."
+                );
             }
             else
             {
@@ -1201,10 +1448,16 @@ namespace Oxide.Plugins
         /// </summary>
         private string InferBanType(string reason)
         {
-            if (string.IsNullOrEmpty(reason)) return "CHEATING_OTHER";
+            if (string.IsNullOrEmpty(reason))
+                return "CHEATING_OTHER";
             string r = reason.ToUpper();
 
-            if (r.Contains("EAC") || r.Contains("EASY ANTI") || r.Contains("HACK") || r.Contains("CHEAT"))
+            if (
+                r.Contains("EAC")
+                || r.Contains("EASY ANTI")
+                || r.Contains("HACK")
+                || r.Contains("CHEAT")
+            )
                 return "CHEATING_SOFTWARE";
             if (r.Contains("BOT") || r.Contains("SCRIPT"))
                 return "CHEATING_BOTTING";
@@ -1221,7 +1474,8 @@ namespace Oxide.Plugins
         /// </summary>
         private string InferReporter(string reason)
         {
-            if (string.IsNullOrEmpty(reason)) return "OTHER";
+            if (string.IsNullOrEmpty(reason))
+                return "OTHER";
             string r = reason.ToUpper();
 
             if (r.Contains("EAC") || r.Contains("EASY ANTI"))
