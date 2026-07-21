@@ -1,5 +1,10 @@
 # Community API Plugins
 
+> [!WARNING]
+> This repo is now un-maintained and archived. To build your own plugin for please use the our [API documentation](https://docs.playsafeid.com/reference) ([OAS](https://docs.playsafeid.com/openapi/play-safe-id-api.json)).
+
+---
+
 This repo holds the community server plugins that PlaySafe ID has initially vetted and reference to in our [documentation](https://docs.playsafeid.com/docs/community-server-integration).
 
 > [!IMPORTANT]
